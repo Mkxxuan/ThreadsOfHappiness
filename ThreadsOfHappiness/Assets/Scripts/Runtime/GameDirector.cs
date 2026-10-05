@@ -117,7 +117,7 @@ namespace Toh.Runtime
                 var bg = go.AddComponent<Image>();
                 bg.color = UiKit.CellAlive;
 
-                // 官方肖像（含蔓藤框与房号丝带），preserveAspect 居中放置
+                // 官方肖像（半身近方形裁剪，比例与显示区一致），preserveAspect 满格无白边
                 Image portrait = null;
                 var pspr = UiKit.LoadSprite("Art/Portraits/portrait_" + c.Id);
                 if (pspr != null)
@@ -128,8 +128,8 @@ namespace Toh.Runtime
                     prt.anchorMin = new Vector2(0.5f, 0f);
                     prt.anchorMax = new Vector2(0.5f, 0f);
                     prt.pivot = new Vector2(0.5f, 0f);
-                    prt.sizeDelta = new Vector2(cell - 8, cell - 40);
-                    prt.anchoredPosition = new Vector2(0, 32);
+                    prt.sizeDelta = new Vector2(cell - 6, cell - 32);
+                    prt.anchoredPosition = new Vector2(0, 28);
                     portrait = pgo.AddComponent<Image>();
                     portrait.sprite = pspr;
                     portrait.preserveAspect = true;
