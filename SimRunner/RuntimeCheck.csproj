@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>RuntimeCheck</AssemblyName>
+    <RootNamespace>RuntimeCheck</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../ThreadsOfHappiness/Assets/Scripts/Core/**/*.cs" />
+    <Compile Include="../ThreadsOfHappiness/Assets/Scripts/Runtime/**/*.cs" />
+    <Compile Include="Stubs.cs" />
+  </ItemGroup>
+</Project>

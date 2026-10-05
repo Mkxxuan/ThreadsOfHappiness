@@ -1,0 +1,10 @@
+# 工作区本地数据
+.workbuddy/
+
+# 日志
+*.log
+
+# .NET 编译产物
+SimRunner/bin/
+SimRunner/obj/
+run_log.txt
