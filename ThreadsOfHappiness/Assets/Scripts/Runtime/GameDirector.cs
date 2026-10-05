@@ -54,11 +54,12 @@ namespace Toh.Runtime
         {
             public RectTransform Root;
             public Image Bg;
-            public Text Room, Name, Susp;
+            public Image Portrait;
+            public Text Name, Susp;
             public Image MonitorToken; public Text MonitorNum;
             public Image GiftToken; public Text GiftNum;
         }
-        class CardSlot { public RectTransform Root; public Image Bg; public Text Label, State; public Button Btn; public RectTransform[] GiftSlots; }
+        class CardSlot { public RectTransform Root; public Image Bg; public Image Header; public Text Label, State; public Button Btn; public RectTransform[] GiftSlots; public RectTransform[] FaceGifts; }
         CardSlot[] _cardSlots;
 
         // ---------- 构建 UI ----------
@@ -76,10 +77,26 @@ namespace Toh.Runtime
         {
             _canvas = UiKit.CreateCanvas();
             var root = _canvas.transform as RectTransform;
+            BuildBackground(root);
             BuildBoard(root);
             BuildRightPanel(root);
             BuildCover(root);
             ShowModeSelect();
+        }
+
+        Sprite _bgGate, _bgTitle;
+
+        void BuildBackground(RectTransform root)
+        {
+            _bgGate = UiKit.LoadSprite("Art/bg_gate");
+            _bgTitle = UiKit.LoadSprite("Art/bg_title");
+            if (_bgGate != null)
+            {
+                var img = UiKit.CreateStretchImage(root, "BgGate", _bgGate, Color.white);
+                img.gameObject.transform.SetAsFirstSibling();
+            }
+            // 暗化层：让前景纸面可读
+            UiKit.CreateStretchImage(root, "BgDim", null, new Color(0.10f, 0.05f, 0.02f, 0.34f));
         }
 
         void BuildBoard(RectTransform root)
@@ -100,17 +117,36 @@ namespace Toh.Runtime
                 var bg = go.AddComponent<Image>();
                 bg.color = UiKit.CellAlive;
 
-                var room = UiKit.CreateText(rt, "Room", c.Room.ToString(), 26, new Color(0.45f, 0.42f, 0.4f), TextAnchor.UpperCenter);
-                room.rectTransform.offsetMin = new Vector2(0, cell - 40);
-                room.rectTransform.offsetMax = new Vector2(-4, -4);
+                // 官方肖像（含蔓藤框与房号丝带），preserveAspect 居中放置
+                Image portrait = null;
+                var pspr = UiKit.LoadSprite("Art/Portraits/portrait_" + c.Id);
+                if (pspr != null)
+                {
+                    var pgo = new GameObject("Portrait");
+                    var prt = pgo.AddComponent<RectTransform>();
+                    prt.SetParent(rt, false);
+                    prt.anchorMin = new Vector2(0.5f, 0f);
+                    prt.anchorMax = new Vector2(0.5f, 0f);
+                    prt.pivot = new Vector2(0.5f, 0f);
+                    prt.sizeDelta = new Vector2(cell - 8, cell - 40);
+                    prt.anchoredPosition = new Vector2(0, 32);
+                    portrait = pgo.AddComponent<Image>();
+                    portrait.sprite = pspr;
+                    portrait.preserveAspect = true;
+                    portrait.raycastTarget = false;
+                }
 
-                var name = UiKit.CreateText(rt, "Name", c.Name, 44, UiKit.TextDark, TextAnchor.MiddleCenter);
-                name.rectTransform.offsetMin = new Vector2(4, 30);
-                name.rectTransform.offsetMax = new Vector2(-4, -44);
+                var name = UiKit.CreateText(rt, "Name", c.Name, 30, UiKit.TextDark, TextAnchor.MiddleCenter);
+                name.rectTransform.anchorMin = new Vector2(0f, 0f);
+                name.rectTransform.anchorMax = new Vector2(1f, 0f);
+                name.rectTransform.offsetMin = new Vector2(2, 2);
+                name.rectTransform.offsetMax = new Vector2(-2, 32);
 
-                var susp = UiKit.CreateText(rt, "Susp", "", 26, new Color(0.5f, 0.2f, 0.2f), TextAnchor.LowerCenter);
+                var susp = UiKit.CreateText(rt, "Susp", "", 22, new Color(0.5f, 0.15f, 0.12f), TextAnchor.LowerRight);
+                susp.rectTransform.anchorMin = new Vector2(0f, 0f);
+                susp.rectTransform.anchorMax = new Vector2(1f, 0f);
                 susp.rectTransform.offsetMin = new Vector2(0, 4);
-                susp.rectTransform.offsetMax = new Vector2(0, 40);
+                susp.rectTransform.offsetMax = new Vector2(-8, 30);
 
                 var mon = new GameObject("MonToken");
                 var monRt = mon.AddComponent<RectTransform>();
@@ -144,7 +180,7 @@ namespace Toh.Runtime
 
                 _cells[id] = new CellView
                 {
-                    Root = rt, Bg = bg, Room = room, Name = name, Susp = susp,
+                    Root = rt, Bg = bg, Portrait = portrait, Name = name, Susp = susp,
                     MonitorToken = monImg, MonitorNum = monNum,
                     GiftToken = giftImg, GiftNum = giftNum,
                 };
@@ -169,7 +205,7 @@ namespace Toh.Runtime
             _hintText = hint;
 
             var menuBtn = UiKit.CreateButton(panel, "MenuBtn", "回到菜单", 30,
-                new Color(0.85f, 0.85f, 0.85f), UiKit.TextDark, new Vector2(210, 60));
+                new Color(0.93f, 0.90f, 0.83f), UiKit.TextDark, new Vector2(210, 60));
             var menuRt = menuBtn.GetComponent<RectTransform>();
             menuRt.anchorMin = menuRt.anchorMax = new Vector2(1f, 1f);
             menuRt.pivot = new Vector2(1f, 1f);
@@ -177,7 +213,7 @@ namespace Toh.Runtime
             menuBtn.onClick.AddListener(ConfirmBackToMenu);
 
             _suspicionBtn = UiKit.CreateButton(panel, "SuspBtn", "怀疑度:关", 30,
-                new Color(0.85f, 0.85f, 0.85f), UiKit.TextDark, new Vector2(210, 60));
+                new Color(0.93f, 0.90f, 0.83f), UiKit.TextDark, new Vector2(210, 60));
             var srt = _suspicionBtn.GetComponent<RectTransform>();
             srt.anchorMin = srt.anchorMax = new Vector2(1f, 1f);
             srt.pivot = new Vector2(1f, 1f);
@@ -238,12 +274,46 @@ namespace Toh.Runtime
                 rt.anchoredPosition = new Vector2(10 + i * step, 10);
                 var bg = go.AddComponent<Image>();
                 bg.color = Color.white;
-                var label = UiKit.CreateText(rt, "L", cards[i].Label, 30, UiKit.TextDark, TextAnchor.UpperCenter);
-                label.rectTransform.offsetMin = new Vector2(2, 116);
-                label.rectTransform.offsetMax = new Vector2(-2, -6);
+
+                // 官方卡风格：浅绿 header + 牌面礼物圆点 + 状态 + 泄密指示
+                var header = new GameObject("Header");
+                var hrt = header.AddComponent<RectTransform>();
+                hrt.SetParent(rt, false);
+                hrt.anchorMin = new Vector2(0f, 1f);
+                hrt.anchorMax = new Vector2(1f, 1f);
+                hrt.offsetMin = new Vector2(0, -34);
+                hrt.offsetMax = new Vector2(0, 0);
+                var himg = header.AddComponent<Image>();
+                himg.color = UiKit.PanelGreen;
+                himg.raycastTarget = false;
+
+                var label = UiKit.CreateText(hrt, "L", cards[i].Label, 24, UiKit.TextDark, TextAnchor.MiddleCenter);
+                label.rectTransform.offsetMin = Vector2.zero;
+                label.rectTransform.offsetMax = Vector2.zero;
+                label.raycastTarget = false;
+
+                // 牌面礼物组合（红/蓝圆点）
+                var faceGifts = new RectTransform[3];
+                var gifts = cards[i].Gifts;
+                float[] faceXs = gifts.Count == 1 ? new[] { 70f } : gifts.Count == 2 ? new[] { 52f, 88f } : new[] { 38f, 70f, 102f };
+                for (int k = 0; k < gifts.Count && k < 3; k++)
+                {
+                    var fgo = new GameObject("FaceGift_" + k);
+                    var frt = fgo.AddComponent<RectTransform>();
+                    frt.SetParent(rt, false);
+                    frt.anchorMin = frt.anchorMax = new Vector2(0f, 1f);
+                    frt.pivot = new Vector2(0.5f, 0.5f);
+                    frt.sizeDelta = new Vector2(26, 26);
+                    frt.anchoredPosition = new Vector2(faceXs[k], -48);
+                    var fimg = fgo.AddComponent<Image>();
+                    fimg.color = gifts[k] == GiftColor.Red ? UiKit.GiftRed : UiKit.GiftBlue;
+                    fimg.raycastTarget = false;
+                    faceGifts[k] = frt;
+                }
+
                 var st = UiKit.CreateText(rt, "S", "", 24, new Color(0.4f, 0.4f, 0.4f), TextAnchor.UpperCenter);
                 st.rectTransform.offsetMin = new Vector2(2, 40);
-                st.rectTransform.offsetMax = new Vector2(-2, -48);
+                st.rectTransform.offsetMax = new Vector2(-2, -64);
 
                 // 泄密礼物指示物：受到阻碍时未使用的礼物显示在牌面下方
                 var giftSlots = new RectTransform[3];
@@ -265,23 +335,34 @@ namespace Toh.Runtime
                 var btn = go.AddComponent<Button>();
                 int id = i;
                 btn.onClick.AddListener(() => OnCardClick(id));
-                _cardSlots[i] = new CardSlot { Root = rt, Bg = bg, Label = label, State = st, Btn = btn, GiftSlots = giftSlots };
+                _cardSlots[i] = new CardSlot { Root = rt, Bg = bg, Header = himg, Label = label, State = st, Btn = btn, GiftSlots = giftSlots, FaceGifts = faceGifts };
             }
         }
 
         void BuildCover(RectTransform root)
         {
-            _cover = UiKit.CreatePanel(root, "Cover", new Color(0.12f, 0.13f, 0.18f, 1f),
+            _cover = UiKit.CreatePanel(root, "Cover", new Color(0.10f, 0.06f, 0.04f, 1f),
                 Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             _cover.SetAsLastSibling();
 
+            // 官方 key visual 背景（百花开与红蓝丝线）+ 暗化，保证文字可读
+            if (_bgTitle != null)
+                UiKit.CreateStretchImage(_cover, "CoverBg", _bgTitle, new Color(0.85f, 0.85f, 0.85f, 1f));
+            UiKit.CreateStretchImage(_cover, "CoverDim", null, new Color(0.06f, 0.03f, 0.02f, 0.42f));
+
             // 标题固定在顶部条带，避免坠入按钮区
-            _coverTitle = UiKit.CreateText(_cover, "Title", "", 80, Color.white, TextAnchor.MiddleCenter);
-            TopBand(_coverTitle.rectTransform, 40, 130, 100, 100);
+            _coverTitle = UiKit.CreateText(_cover, "Title", "", 84, Color.white, TextAnchor.MiddleCenter);
+            TopBand(_coverTitle.rectTransform, 30, 130, 100, 100);
+            var ol = _coverTitle.gameObject.AddComponent<Outline>();
+            ol.effectColor = new Color(0.20f, 0.08f, 0.05f);
+            ol.effectDistance = new Vector2(3, -3);
 
             // 说明文字固定在中部条带
-            _coverBody = UiKit.CreateText(_cover, "Body", "", 40, new Color(0.85f, 0.86f, 0.9f), TextAnchor.UpperCenter);
-            TopBand(_coverBody.rectTransform, 190, 350, 160, 160);
+            _coverBody = UiKit.CreateText(_cover, "Body", "", 38, new Color(0.96f, 0.94f, 0.88f), TextAnchor.UpperCenter);
+            TopBand(_coverBody.rectTransform, 180, 340, 160, 160);
+            var ol2 = _coverBody.gameObject.AddComponent<Outline>();
+            ol2.effectColor = new Color(0.16f, 0.07f, 0.04f);
+            ol2.effectDistance = new Vector2(2, -2);
 
             // 按钮区固定在底部
             _coverButtons = UiKit.CreatePanel(_cover, "CoverButtons", Color.clear,
@@ -306,7 +387,7 @@ namespace Toh.Runtime
         Button AddButton(string label, System.Action cb, Color? bg = null, Vector2? size = null)
         {
             var b = UiKit.CreateButton(_buttonRow, "Btn_" + label, label, 34,
-                bg ?? new Color(0.3f, 0.5f, 0.85f), Color.white, size ?? new Vector2(260, 90));
+                bg ?? UiKit.AccentBrown, Color.white, size ?? new Vector2(260, 90));
             var le = b.gameObject.AddComponent<LayoutElement>();
             le.minWidth = size?.x ?? 260;
             le.preferredWidth = size?.x ?? 260;
@@ -325,13 +406,13 @@ namespace Toh.Runtime
             if (main != null)
             {
                 var b = UiKit.CreateButton(_coverButtons, "Main", main.Value.label, 40,
-                    new Color(0.3f, 0.55f, 0.9f), Color.white, new Vector2(680, 96));
+                    new Color(0.42f, 0.26f, 0.18f), Color.white, new Vector2(680, 96));
                 b.onClick.AddListener(() => main.Value.cb());
             }
             if (sec != null)
             {
                 var b = UiKit.CreateButton(_coverButtons, "Sec", sec.Value.label, 34,
-                    new Color(0.55f, 0.55f, 0.6f), Color.white, new Vector2(680, 80));
+                    new Color(0.45f, 0.36f, 0.28f), Color.white, new Vector2(680, 80));
                 b.onClick.AddListener(() => sec.Value.cb());
             }
         }
@@ -384,17 +465,17 @@ namespace Toh.Runtime
                 ("单人 · 玩附身随从方（对抗 AI 主人公）", () => StartGame(GameMode.SinglePossessed)));
             // 第三个按钮（热座）+ 设置按钮：手动加进封面按钮区
             var hot = UiKit.CreateButton(_coverButtons, "Hot", "双人 · 同屏热座对战", 40,
-                new Color(0.3f, 0.55f, 0.9f), Color.white, new Vector2(680, 96));
+                new Color(0.42f, 0.26f, 0.18f), Color.white, new Vector2(680, 96));
             hot.onClick.AddListener(() => StartGame(GameMode.Hotseat));
             var diffBtn = UiKit.CreateButton(_coverButtons, "Diff", "AI 难度：普通", 32,
-                new Color(0.45f, 0.45f, 0.5f), Color.white, new Vector2(680, 76));
+                new Color(0.45f, 0.36f, 0.28f), Color.white, new Vector2(680, 76));
             diffBtn.onClick.AddListener(() =>
             {
                 _diff = (Difficulty)(((int)_diff + 1) % 3);
                 diffBtn.GetComponentInChildren<Text>().text = "AI 难度：" + DiffName(_diff);
             });
             var ifBtn = UiKit.CreateButton(_coverButtons, "If", "IF 路线：关", 32,
-                new Color(0.45f, 0.45f, 0.5f), Color.white, new Vector2(680, 76));
+                new Color(0.45f, 0.36f, 0.28f), Color.white, new Vector2(680, 76));
             ifBtn.onClick.AddListener(() =>
             {
                 _ifRoute = !_ifRoute;
@@ -538,7 +619,7 @@ namespace Toh.Runtime
             {
                 RulesEngine.EndRound(_state);
                 DrivePhase();
-            }, new Color(0.3f, 0.5f, 0.85f), new Vector2(330, 90));
+            }, new Color(0.42f, 0.26f, 0.18f), new Vector2(330, 90));
         }
 
         void ConfirmMonitors()
@@ -580,7 +661,7 @@ namespace Toh.Runtime
             ClearButtons();
             _hintText.text = $"使用【{_pendingCard.Label}】：依次点击你的随从（紫色）作为礼物持有者，再点击高亮目标。";
             AddButton("撤销", UndoAssignment, new Color(0.6f, 0.6f, 0.65f), new Vector2(150, 90));
-            AddButton("确认行动", ConfirmPossessAction, new Color(0.3f, 0.55f, 0.9f), new Vector2(210, 90));
+            AddButton("确认行动", ConfirmPossessAction, new Color(0.55f, 0.10f, 0.10f), new Vector2(210, 90));
             RefreshAll();
         }
 
@@ -655,7 +736,7 @@ namespace Toh.Runtime
                 AddButton("确认随从", () =>
                 {
                     BeginWithPossessed(_setupSelection.ToArray());
-                }, new Color(0.75f, 0.4f, 0.75f), new Vector2(240, 90));
+                }, new Color(0.55f, 0.10f, 0.10f), new Vector2(240, 90));
             }
             else
             {
@@ -770,6 +851,7 @@ namespace Toh.Runtime
             {
                 var v = _cells[c.Id];
                 v.Bg.color = UiKit.CellAlive;
+                if (v.Portrait != null) v.Portrait.color = Color.white;
                 v.MonitorToken.gameObject.SetActive(false);
                 v.GiftToken.gameObject.SetActive(false);
                 v.Susp.text = "";
@@ -820,6 +902,15 @@ namespace Toh.Runtime
                 if (_setupSelection.Contains(i)) col = UiKit.CellPossessed;
                 v.Bg.color = col;
 
+                // 肖像色调：幸福状态染附身红，选中/目标提亮
+                if (v.Portrait != null)
+                {
+                    if (_state.IsHappy(i)) v.Portrait.color = new Color(1f, 0.78f, 0.78f);
+                    else if (legalTargets != null && legalTargets.Contains(i)) v.Portrait.color = new Color(0.8f, 1f, 0.8f);
+                    else if (myPossessed != null && myPossessed.Contains(i) && !_state.IsMonitoredThisRound(i)) v.Portrait.color = new Color(0.88f, 0.8f, 1f);
+                    else v.Portrait.color = Color.white;
+                }
+
                 // 监视指示物：当前回合生效中（黄色），历史回合失效（灰色保持不变）并显示当时回合数
                 if (_state.IsMonitoredThisRound(i))
                 {
@@ -865,6 +956,7 @@ namespace Toh.Runtime
                 for (int i = 0; i < _cardSlots.Length; i++)
                 {
                     _cardSlots[i].Bg.color = Color.white;
+                    _cardSlots[i].Header.color = UiKit.PanelGreen;
                     _cardSlots[i].State.text = "";
                     RenderSlotGifts(_cardSlots[i], null);
                     _cardSlots[i].Btn.interactable = false;
@@ -878,6 +970,7 @@ namespace Toh.Runtime
                 if (rec != null)
                 {
                     slot.Bg.color = new Color(0.82f, 0.82f, 0.84f);
+                    slot.Header.color = new Color(0.72f, 0.74f, 0.68f);
                     var leftover = UnusedGiftColors(rec);
                     slot.State.text = $"第{rec.Round}回合用\n" + (leftover.Count > 0 ? "礼物泄密" : "无泄密");
                     RenderSlotGifts(slot, leftover);
@@ -887,6 +980,7 @@ namespace Toh.Runtime
                 {
                     bool pickable = _ui == UiState.PossessPickCard;
                     slot.Bg.color = pickable ? new Color(1f, 0.96f, 0.75f) : Color.white;
+                    slot.Header.color = UiKit.PanelGreen;
                     slot.State.text = "未使用";
                     RenderSlotGifts(slot, null);
                     slot.Btn.interactable = pickable;

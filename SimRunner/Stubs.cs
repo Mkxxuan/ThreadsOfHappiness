@@ -61,6 +61,7 @@ namespace UnityEngine
         public Vector2 anchoredPosition { get; set; }
         public void SetParent(Transform p, bool worldStays) { }
         public void SetAsLastSibling() { }
+        public void SetAsFirstSibling() { }
         public IEnumerator GetEnumerator() => ((IEnumerable)Array.Empty<object>()).GetEnumerator();
     }
 
@@ -81,9 +82,12 @@ namespace UnityEngine
         public Color backgroundColor { get; set; }
     }
 
+    public class Sprite : Object { public string spriteName; }
+
     public static class Resources
     {
         public static T GetBuiltinResource<T>(string path) where T : Object, new() => new T();
+        public static T Load<T>(string path) where T : Object => null;
     }
 
     public class MonoBehaviour : Component
@@ -110,7 +114,19 @@ namespace UnityEngine.UI
         public UnityEngine.RectTransform rectTransform => null;
     }
 
-    public class Image : Graphic { }
+    public class Image : Graphic
+    {
+        public UnityEngine.Sprite sprite { get; set; }
+        public bool preserveAspect { get; set; }
+    }
+
+    public class Outline : BaseMeshEffect
+    {
+        public UnityEngine.Color effectColor { get; set; }
+        public UnityEngine.Vector2 effectDistance { get; set; }
+    }
+
+    public class BaseMeshEffect : UnityEngine.EventSystems.UIBehaviour { }
 
     public class Text : Graphic
     {
