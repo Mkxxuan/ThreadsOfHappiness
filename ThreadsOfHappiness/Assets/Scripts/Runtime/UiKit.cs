@@ -94,7 +94,7 @@ namespace Toh.Runtime
         public static readonly Color PanelBg = new Color(0.97f, 0.945f, 0.88f, 0.92f);   // 米白纸面
         public static readonly Color PanelGreen = new Color(0.78f, 0.86f, 0.62f, 0.95f); // 卡头浅绿
         public static readonly Color CellAlive = new Color(0.99f, 0.975f, 0.93f);
-        public static readonly Color CellHappy = new Color(0.96f, 0.72f, 0.72f);         // 幸福：附身红粉
+        public static readonly Color CellHappy = new Color(0.72f, 0.52f, 0.52f);         // 幸福（死亡）：暗化底色
         public static readonly Color CellSelect = new Color(0.72f, 0.87f, 1.00f);
         public static readonly Color CellPossessed = new Color(0.85f, 0.72f, 1.00f);
         public static readonly Color CellTarget = new Color(0.75f, 0.95f, 0.75f);

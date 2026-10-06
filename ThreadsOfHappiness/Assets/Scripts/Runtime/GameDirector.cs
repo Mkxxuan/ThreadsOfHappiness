@@ -56,7 +56,9 @@ namespace Toh.Runtime
             public Image Bg;
             public Image Portrait;
             public Text Name, Susp;
-            public Image MonitorToken; public Text MonitorNum;
+            public RectTransform MonWrap;
+            public readonly List<Image> MonChips = new List<Image>();
+            public readonly List<Text> MonNums = new List<Text>();
             public Image GiftToken; public Text GiftNum;
         }
         class CardSlot { public RectTransform Root; public Image Bg; public Image Header; public Text Label, State; public Button Btn; public RectTransform[] GiftSlots; public RectTransform[] FaceGifts; }
@@ -136,30 +138,34 @@ namespace Toh.Runtime
                     portrait.raycastTarget = false;
                 }
 
-                var name = UiKit.CreateText(rt, "Name", c.Name, 30, UiKit.TextDark, TextAnchor.MiddleCenter);
-                name.rectTransform.anchorMin = new Vector2(0f, 0f);
-                name.rectTransform.anchorMax = new Vector2(1f, 0f);
-                name.rectTransform.offsetMin = new Vector2(2, 2);
-                name.rectTransform.offsetMax = new Vector2(-2, 32);
+                // 底部名字丝带：深咖啡条 + 米白字，文字做成丝带子级（与按钮标签同模式，渲染可靠）
+                // 格子高 190，丝带占 y4..36 → TopBand 自顶起算 top=154, height=32
+                var ribbon = new GameObject("NameRibbon");
+                var ribRt = ribbon.AddComponent<RectTransform>();
+                ribRt.SetParent(rt, false);
+                TopBand(ribRt, 154f, 32f, 2f, 2f);
+                var ribImg = ribbon.AddComponent<Image>();
+                ribImg.color = new Color(0.30f, 0.20f, 0.12f, 0.88f);
+                ribImg.raycastTarget = false;
 
+                var name = UiKit.CreateText(ribRt, "Name", c.Name, 26,
+                    new Color(0.98f, 0.96f, 0.90f), TextAnchor.MiddleCenter);
+
+                // 可疑度显示在丝带上方，避免重叠
                 var susp = UiKit.CreateText(rt, "Susp", "", 22, new Color(0.5f, 0.15f, 0.12f), TextAnchor.LowerRight);
                 susp.rectTransform.anchorMin = new Vector2(0f, 0f);
                 susp.rectTransform.anchorMax = new Vector2(1f, 0f);
-                susp.rectTransform.offsetMin = new Vector2(0, 4);
-                susp.rectTransform.offsetMax = new Vector2(-8, 30);
+                susp.rectTransform.offsetMin = new Vector2(0, 40);
+                susp.rectTransform.offsetMax = new Vector2(-8, 66);
 
-                var mon = new GameObject("MonToken");
+                // 监视指示物容器：圆片按需在渲染时创建，多枚并列展示
+                var mon = new GameObject("MonWrap");
                 var monRt = mon.AddComponent<RectTransform>();
                 monRt.SetParent(rt, false);
                 monRt.anchorMin = monRt.anchorMax = new Vector2(0f, 1f);
-                monRt.pivot = new Vector2(0.5f, 0.5f);
-                monRt.sizeDelta = new Vector2(64, 64);
-                monRt.anchoredPosition = new Vector2(36, -36);
-                var monImg = mon.AddComponent<Image>();
-                monImg.color = UiKit.MonitorColor;
-                monImg.raycastTarget = false;
-                var monNum = UiKit.CreateText(monRt, "N", "", 30, Color.white, TextAnchor.MiddleCenter);
-                monNum.raycastTarget = false;
+                monRt.pivot = new Vector2(0f, 1f);
+                monRt.sizeDelta = Vector2.zero;
+                monRt.anchoredPosition = new Vector2(4, -4);
 
                 var gift = new GameObject("GiftToken");
                 var giftRt = gift.AddComponent<RectTransform>();
@@ -181,7 +187,7 @@ namespace Toh.Runtime
                 _cells[id] = new CellView
                 {
                     Root = rt, Bg = bg, Portrait = portrait, Name = name, Susp = susp,
-                    MonitorToken = monImg, MonitorNum = monNum,
+                    MonWrap = monRt,
                     GiftToken = giftImg, GiftNum = giftNum,
                 };
             }
@@ -852,7 +858,7 @@ namespace Toh.Runtime
                 var v = _cells[c.Id];
                 v.Bg.color = UiKit.CellAlive;
                 if (v.Portrait != null) v.Portrait.color = Color.white;
-                v.MonitorToken.gameObject.SetActive(false);
+                foreach (var chip in v.MonChips) chip.gameObject.SetActive(false);
                 v.GiftToken.gameObject.SetActive(false);
                 v.Susp.text = "";
             }
@@ -898,41 +904,30 @@ namespace Toh.Runtime
                 if (_ui == UiState.SetupPossessed && setupPool.Contains(i)) col = new Color(0.96f, 0.93f, 0.98f);
                 if (myPossessed != null && myPossessed.Contains(i) && !_state.IsMonitoredThisRound(i)) col = UiKit.CellPossessed;
                 if (legalTargets != null && legalTargets.Contains(i)) col = UiKit.CellTarget;
+                // 监视阶段：可监视的角色给浅黄底提示可点击，已选中的给亮蓝底
+                if (_ui == UiState.SelectMonitors && _state.CanBeMonitored(i) && !_monitorSelection.Contains(i))
+                    col = new Color(0.99f, 0.94f, 0.72f);
                 if (_monitorSelection.Contains(i)) col = UiKit.CellSelect;
                 if (_setupSelection.Contains(i)) col = UiKit.CellPossessed;
                 v.Bg.color = col;
 
-                // 肖像色调：幸福状态染附身红，选中/目标提亮
+                // 肖像色调：幸福（死亡）状态压暗成暗灰红；监视预选中染蓝；目标提亮
                 if (v.Portrait != null)
                 {
-                    if (_state.IsHappy(i)) v.Portrait.color = new Color(1f, 0.78f, 0.78f);
+                    if (_monitorSelection.Contains(i)) v.Portrait.color = new Color(0.55f, 0.78f, 1f);
+                    else if (_state.IsHappy(i)) v.Portrait.color = new Color(0.38f, 0.27f, 0.27f);
                     else if (legalTargets != null && legalTargets.Contains(i)) v.Portrait.color = new Color(0.8f, 1f, 0.8f);
                     else if (myPossessed != null && myPossessed.Contains(i) && !_state.IsMonitoredThisRound(i)) v.Portrait.color = new Color(0.88f, 0.8f, 1f);
                     else v.Portrait.color = Color.white;
                 }
 
-                // 监视指示物：当前回合生效中（黄色），历史回合失效（灰色保持不变）并显示当时回合数
-                if (_state.IsMonitoredThisRound(i))
-                {
-                    v.MonitorToken.gameObject.SetActive(true);
-                    v.MonitorToken.color = UiKit.MonitorActive;
-                    v.MonitorNum.color = new Color(0.25f, 0.2f, 0.05f);
-                    v.MonitorNum.text = _state.Round.ToString();
-                }
-                else
-                {
-                    int monRound = -1;
-                    foreach (var rec in _state.History)
-                        if (rec.Monitored.Contains(i)) monRound = rec.Round;
-                    if (monRound > 0)
-                    {
-                        v.MonitorToken.gameObject.SetActive(true);
-                        v.MonitorToken.color = UiKit.MonitorExpired;
-                        v.MonitorNum.color = new Color(0.97f, 0.97f, 0.97f);
-                        v.MonitorNum.text = monRound.ToString();
-                    }
-                    else v.MonitorToken.gameObject.SetActive(false);
-                }
+                // 监视指示物：多枚并列展示——当前回合（预选中/生效中）黄色在最前，历史回合灰色依次排列
+                var monList = new List<(int round, bool active)>();
+                if (_monitorSelection.Contains(i) || _state.IsMonitoredThisRound(i))
+                    monList.Add((_state.Round, true));
+                foreach (var rec in _state.History)
+                    if (rec.Monitored.Contains(i)) monList.Add((rec.Round, false));
+                LayoutMonChips(v, monList);
 
                 // 礼物指示物（公开信息）
                 if (_state.IsHappy(i) && _state.HappyRound[i] >= 1)
@@ -947,6 +942,40 @@ namespace Toh.Runtime
             }
 
             RenderCards();
+        }
+
+        /// <summary>把监视圆片按 4 枚一行并列排布在格子左上角（按需扩池，多余的隐藏）。</summary>
+        void LayoutMonChips(CellView v, List<(int round, bool active)> items)
+        {
+            const float chip = 36f, gap = 2f;
+            const int perRow = 4;
+            while (v.MonChips.Count < items.Count)
+            {
+                var go = new GameObject("MonChip" + v.MonChips.Count);
+                var rt = go.AddComponent<RectTransform>();
+                rt.SetParent(v.MonWrap, false);
+                rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+                rt.pivot = new Vector2(0f, 1f);
+                rt.sizeDelta = new Vector2(chip, chip);
+                var img = go.AddComponent<Image>();
+                img.raycastTarget = false;
+                var num = UiKit.CreateText(rt, "N", "", 20, Color.white, TextAnchor.MiddleCenter);
+                num.raycastTarget = false;
+                v.MonChips.Add(img);
+                v.MonNums.Add(num);
+            }
+            for (int k = 0; k < v.MonChips.Count; k++)
+            {
+                bool on = k < items.Count;
+                v.MonChips[k].gameObject.SetActive(on);
+                if (!on) continue;
+                int col = k % perRow, row = k / perRow;
+                v.MonChips[k].rectTransform.anchoredPosition =
+                    new Vector2(2 + col * (chip + gap), -(2 + row * (chip + gap)));
+                v.MonChips[k].color = items[k].active ? UiKit.MonitorActive : UiKit.MonitorExpired;
+                v.MonNums[k].color = items[k].active ? new Color(0.25f, 0.2f, 0.05f) : new Color(0.97f, 0.97f, 0.97f);
+                v.MonNums[k].text = items[k].round.ToString();
+            }
         }
 
         void RenderCards()
