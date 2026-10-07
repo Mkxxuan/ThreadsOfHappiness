@@ -37,6 +37,7 @@ namespace Toh.Runtime
         PreviewCardDef _pendingCard;
         readonly List<Assignment> _pendingAssignments = new List<Assignment>();
         int _carrierSelection = -1;
+        GiftColor? _colorOverride;   // 玩家指定的下一份礼物颜色（双色牌可自由决定先用蓝还是红）
 
         // UI 引用
         Canvas _canvas;
@@ -55,7 +56,7 @@ namespace Toh.Runtime
             public RectTransform Root;
             public Image Bg;
             public Image Portrait;
-            public Text Name, Susp;
+            public Text Name, Susp, Check;
             public RectTransform MonWrap;
             public readonly List<Image> MonChips = new List<Image>();
             public readonly List<Text> MonNums = new List<Text>();
@@ -158,6 +159,17 @@ namespace Toh.Runtime
                 susp.rectTransform.offsetMin = new Vector2(0, 40);
                 susp.rectTransform.offsetMax = new Vector2(-8, 66);
 
+                // 「已选」标记：布置阶段选中随从时显示在格子顶部（醒目高亮的一部分）
+                var check = UiKit.CreateText(rt, "Check", "", 34, new Color(0.99f, 0.97f, 0.92f), TextAnchor.UpperCenter);
+                check.rectTransform.anchorMin = new Vector2(0f, 1f);
+                check.rectTransform.anchorMax = new Vector2(1f, 1f);
+                check.rectTransform.offsetMin = new Vector2(0, -58);
+                check.rectTransform.offsetMax = new Vector2(0, -8);
+                var chkOl = check.gameObject.AddComponent<Outline>();
+                chkOl.effectColor = new Color(0.28f, 0.13f, 0.42f, 0.95f);
+                chkOl.effectDistance = new Vector2(2f, -2f);
+                check.gameObject.SetActive(false);
+
                 // 监视指示物容器：圆片按需在渲染时创建，多枚并列展示
                 var mon = new GameObject("MonWrap");
                 var monRt = mon.AddComponent<RectTransform>();
@@ -186,7 +198,7 @@ namespace Toh.Runtime
 
                 _cells[id] = new CellView
                 {
-                    Root = rt, Bg = bg, Portrait = portrait, Name = name, Susp = susp,
+                    Root = rt, Bg = bg, Portrait = portrait, Name = name, Susp = susp, Check = check,
                     MonWrap = monRt,
                     GiftToken = giftImg, GiftNum = giftNum,
                 };
@@ -651,6 +663,7 @@ namespace Toh.Runtime
             _pendingCard = null;
             _pendingAssignments.Clear();
             _carrierSelection = -1;
+            _colorOverride = null;
             RefreshAll();
             ClearButtons();
             _hintText.text = "附身随从阶段：先选择 1 张预告牌（点击下方卡牌）。";
@@ -658,17 +671,39 @@ namespace Toh.Runtime
 
         void OnCardClick(int cardId)
         {
-            if (_ui != UiState.PossessPickCard) return;
+            // 选牌阶段与分配阶段都可点卡：分配中点其他牌 = 改用该牌（已分配的礼物清空）
+            if (_ui != UiState.PossessPickCard && _ui != UiState.PossessAssign) return;
             if (_state.UsedCardIds.Contains(cardId)) return;
+            if (_pendingCard != null && _pendingCard.Id == cardId) return;
+            bool switched = _ui == UiState.PossessAssign;
             _pendingCard = _state.Cards[cardId];
             _ui = UiState.PossessAssign;
             _pendingAssignments.Clear();
             _carrierSelection = -1;
+            _colorOverride = null;
+            RefreshPossessButtons();
+            bool bothColors = GiftColorRemaining(GiftColor.Blue) > 0 && GiftColorRemaining(GiftColor.Red) > 0;
+            _hintText.text = $"{(switched ? "已改用" : "使用")}【{_pendingCard.Label}】：依次点击你的随从（紫色）作为礼物持有者，再点击高亮目标。"
+                + (bothColors ? "可用「下一份」按钮自由选择先用蓝礼物还是红礼物。" : "");
+            RefreshAll();
+        }
+
+        /// <summary>重建附身行动按钮行：双色牌且未锁定持有者时提供「下一份：蓝/红礼物」自由选色。</summary>
+        void RefreshPossessButtons()
+        {
+            if (_ui != UiState.PossessAssign || _pendingCard == null) return;
             ClearButtons();
-            _hintText.text = $"使用【{_pendingCard.Label}】：依次点击你的随从（紫色）作为礼物持有者，再点击高亮目标。";
+            if (GiftColorRemaining(GiftColor.Blue) > 0 && GiftColorRemaining(GiftColor.Red) > 0 && _carrierSelection < 0)
+            {
+                var next = CurrentGiftColor();
+                bool blueOn = next == GiftColor.Blue, redOn = next == GiftColor.Red;
+                AddButton("下一份：蓝礼物", () => { _colorOverride = GiftColor.Blue; RefreshPossessButtons(); },
+                    blueOn ? new Color(0.35f, 0.58f, 0.98f) : new Color(0.24f, 0.40f, 0.75f), new Vector2(280, 90));
+                AddButton("下一份：红礼物", () => { _colorOverride = GiftColor.Red; RefreshPossessButtons(); },
+                    redOn ? new Color(0.92f, 0.32f, 0.26f) : new Color(0.68f, 0.20f, 0.17f), new Vector2(280, 90));
+            }
             AddButton("撤销", UndoAssignment, new Color(0.6f, 0.6f, 0.65f), new Vector2(150, 90));
             AddButton("确认行动", ConfirmPossessAction, new Color(0.55f, 0.10f, 0.10f), new Vector2(210, 90));
-            RefreshAll();
         }
 
         List<int> MyUnmonitoredPossessed()
@@ -685,6 +720,11 @@ namespace Toh.Runtime
             if (_pendingAssignments.Count == 0) return;
             _pendingAssignments.RemoveAt(_pendingAssignments.Count - 1);
             _carrierSelection = -1;
+            // 撤销后重算进度并同步到提示文字
+            int max = RulesEngine.MaxConversionsReal(_state, _pendingCard);
+            int remainingGifts = _pendingCard.Gifts.Count - _pendingAssignments.Count;
+            _hintText.text = $"已撤销一份礼物。当前已转换 {_pendingAssignments.Count}/{max}，剩余 {remainingGifts} 份礼物待分配。";
+            RefreshPossessButtons();
             RefreshAll();
         }
 
@@ -709,6 +749,7 @@ namespace Toh.Runtime
                 Log($"　有 {plan.UnusedGifts} 份礼物未使用——被主人公监视阻碍了！");
             _pendingCard = null;
             _pendingAssignments.Clear();
+            _colorOverride = null;
             AfterPossessedAction();
         }
 
@@ -791,6 +832,7 @@ namespace Toh.Runtime
                     }
                     _carrierSelection = id;
                     _hintText.text = $"{_state.Char(id).Name} 持有{(color == GiftColor.Red ? "红" : "蓝")}色礼物：点击一个高亮目标。";
+                    RefreshPossessButtons();   // 持有者已锁定 → 隐藏选色按钮
                     RenderBoard();
                 }
                 else
@@ -811,6 +853,7 @@ namespace Toh.Runtime
                         _hintText.text = $"已达到本回合最大转换数（{max}），可确认行动。";
                     else
                         _hintText.text = $"已转换 {_pendingAssignments.Count}/{max}。继续分配剩余 {remainingGifts} 份礼物。";
+                    RefreshPossessButtons();   // 刷新「下一份」按钮的当前颜色高亮
                     RenderBoard();
                 }
                 else
@@ -820,8 +863,15 @@ namespace Toh.Runtime
             }
         }
 
+        /// <summary>某颜色礼物在当前牌上还剩几份（牌面数量减去已分配数量）。</summary>
+        int GiftColorRemaining(GiftColor c)
+            => _pendingCard.Gifts.Count(g => g == c) - _pendingAssignments.Count(a => a.Color == c);
+
         GiftColor CurrentGiftColor()
         {
+            // 玩家指定的优先色（注意 GiftColor.Red == 0，必须用 HasValue 判空而非真值判断）
+            if (_colorOverride.HasValue && GiftColorRemaining(_colorOverride.Value) > 0)
+                return _colorOverride.Value;
             // 依次消耗预告牌上的礼物（蓝/红按牌面顺序），跳过已被用完的颜色
             int red = _pendingAssignments.Count(a => a.Color == GiftColor.Red);
             int blue = _pendingAssignments.Count(a => a.Color == GiftColor.Blue);
@@ -853,11 +903,15 @@ namespace Toh.Runtime
 
         void RenderBoardEmpty()
         {
+            // 布置阶段（对局状态尚未创建）：已选随从给强紫色高亮 +「已选」标记
+            bool setup = _ui == UiState.SetupPossessed;
             foreach (var c in GameConfig.DefaultRoster())
             {
                 var v = _cells[c.Id];
-                v.Bg.color = UiKit.CellAlive;
-                if (v.Portrait != null) v.Portrait.color = Color.white;
+                bool sel = setup && _setupSelection.Contains(c.Id);
+                v.Bg.color = sel ? UiKit.CellPossessed : UiKit.CellAlive;
+                if (v.Portrait != null) v.Portrait.color = sel ? new Color(0.62f, 0.45f, 0.88f) : Color.white;
+                if (v.Check != null) v.Check.gameObject.SetActive(sel);
                 foreach (var chip in v.MonChips) chip.gameObject.SetActive(false);
                 v.GiftToken.gameObject.SetActive(false);
                 v.Susp.text = "";
@@ -938,6 +992,9 @@ namespace Toh.Runtime
                 }
                 else v.GiftToken.gameObject.SetActive(false);
 
+                // 「已选」标记只在布置阶段出现；对局开始后一律隐藏
+                if (v.Check != null) v.Check.gameObject.SetActive(false);
+
                 v.Susp.text = prob != null ? $"{prob[i] * 100f:F0}%" : "";
             }
 
@@ -1007,7 +1064,8 @@ namespace Toh.Runtime
                 }
                 else
                 {
-                    bool pickable = _ui == UiState.PossessPickCard;
+                    // 选牌阶段与分配阶段都可点其他未用牌换牌
+                    bool pickable = _ui == UiState.PossessPickCard || _ui == UiState.PossessAssign;
                     slot.Bg.color = pickable ? new Color(1f, 0.96f, 0.75f) : Color.white;
                     slot.Header.color = UiKit.PanelGreen;
                     slot.State.text = "未使用";
@@ -1015,7 +1073,7 @@ namespace Toh.Runtime
                     slot.Btn.interactable = pickable;
                 }
                 if (_pendingCard != null && _pendingCard.Id == i)
-                    slot.Bg.color = new Color(0.75f, 0.9f, 1f);
+                    slot.Bg.color = new Color(0.82f, 0.72f, 1f);   // 当前使用中的牌：淡紫高亮
             }
         }
 
